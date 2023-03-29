@@ -34,6 +34,7 @@ import {
   User,
   View,
   DocumentUser,
+  CollectionUser,
 } from "@server/models";
 import DocumentHelper from "@server/models/helpers/DocumentHelper";
 import SearchHelper from "@server/models/helpers/SearchHelper";
@@ -959,62 +960,83 @@ router.post(
 router.post(
   "documents.add_user",
   auth(),
-  // validate(T.DocumentsAddUser),
+  validate(T.DocumentsAddUser),
   async (ctx: APIContext) => {
     const { auth } = ctx.state;
     const actor = auth.user;
-    const {
-      id,
-      userId,
-      documentId,
-      permission,
-      collectionId,
-      createdById,
-      startDateQuery,
-      endDateQuery,
-    } = ctx.request.body;
+    const { id, userId, documentId, permission } = ctx.request.body;
 
-    // const userCount = await User.count();
-    // const DocumentCount = await Document.count({
-    //   where: { createdById: userId },
-    // });
-    // const DocumentPassDate = await Document.findAll({
-    //   where: {
-    //     createdAt: {
-    //       [Op.between]: [startDateQuery, endDateQuery],
-    //     },
-    //   },
-    // });
-    // const documentUser = await DocumentUser.findAll({
-    //   where: {
-    //     userId: userId,
-    //   },
-    // });
-    // console.log(DocumentCount);
-    const membership = await DocumentUser.create(
-      {
+    // S1: Check ACTOR === createdById ?'
+    const documentInstance = await Document.findOne({
+      where: {
+        userId: actor.id,
+      },
+    });
+    if (documentInstance?.createdById) {
+      throw InvalidRequestError("You cant add yourself");
+    }
+    if (!documentInstance?.collectionId) {
+      throw InvalidRequestError("Document not exist in Collection");
+    }
+    // S2: Check documentId exist in Document ?
+    const collectionInstance = await Document.findOne({
+      where: {
+        id: documentId,
+      },
+    });
+    if (!collectionInstance) {
+      throw InvalidRequestError("DocumentId not exist in Document");
+    }
+
+    // S3: Check user exist in User ?
+    const CheckUserIDinUser = await User.findOne({
+      where: {
+        userid: userId,
+      },
+    });
+    if (CheckUserIDinUser) {
+      throw InvalidRequestError("UserId not exist in User");
+    }
+
+    // S4: Check user exist in CollectionUser ?
+    const CheckUserIDinColUser = await CollectionUser.findOne({
+      where: {
+        userId: userId,
+        collectionId: documentInstance?.collectionId,
+      },
+    });
+    if (!CheckUserIDinColUser) {
+      throw InvalidRequestError("UserId not in CollectionUser");
+    }
+
+    // S5: Check user exist in DocumentUser ?
+    const CheckUserIDinDocUser = await DocumentUser.findOne({
+      where: {
+        userid: userId,
+        documentid: documentId,
+      },
+    });
+    if (!CheckUserIDinDocUser) {
+      throw InvalidRequestError("UserId not in DocumentUser");
+    }
+
+    if (!CheckUserIDinUser && !CheckUserIDinColUser && !CheckUserIDinDocUser) {
+      const membership = await DocumentUser.create({
         id: id,
         userid: userId,
         documentid: documentId,
         permission: permission,
-        collectionid: collectionId,
-        createdbyid: createdById
-      }
-    )
+      });
+    }
     ctx.body = {
       data: {
         actor: actor.id,
         users: userId,
         permisson: permission,
-        // userCount: userCount,
-        // documentCount: DocumentCount,
-        // listDocument: DocumentPassDate,
-        // documentTest: documentUser,
       },
     };
   }
 );
-
 
 router.post(
   "documents.archive",

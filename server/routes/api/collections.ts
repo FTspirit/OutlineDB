@@ -391,6 +391,8 @@ router.post(
       lock: transaction.LOCK.UPDATE,
     });
 
+    console.log(membership);
+
     if (userId === actor.id) {
       throw AuthorizationError("You cannot add yourself to a collection");
     }

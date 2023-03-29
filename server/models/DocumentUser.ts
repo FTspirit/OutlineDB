@@ -7,6 +7,7 @@ import {
   Table,
   DataType,
   Scopes,
+  PrimaryKey,
 } from "sequelize-typescript";
 import { DocumentPermission } from "@shared/types";
 import Document from "./Document";
@@ -39,17 +40,16 @@ class DocumentUser extends BaseModel {
   @Column(DataType.STRING)
   permission: DocumentPermission;
 
+  @PrimaryKey
+  @Column(DataType.UUID)
+  id: string;
+
   @Column(DataType.UUID)
   documentid: string;
 
   @Column(DataType.UUID)
-  collectionid: string;
-
-  @Column(DataType.UUID)
   userid: string;
 
-  @Column(DataType.UUID)
-  createdbyid: string;
 }
 
 export default DocumentUser;
