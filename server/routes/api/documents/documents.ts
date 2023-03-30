@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable object-shorthand */
 import fs from "fs-extra";
 import invariant from "invariant";
 import Router from "koa-router";
@@ -48,12 +50,12 @@ import { APIContext } from "@server/types";
 import { RateLimiterStrategy } from "@server/utils/RateLimiter";
 import { getTeamFromContext } from "@server/utils/passport";
 import slugify from "@server/utils/slugify";
-import { assertPresent } from "@server/validation";
+import { assertPresent, assertDocumentPermission } from "@server/validation";
 import env from "../../../env";
 import pagination from "../middlewares/pagination";
 import * as T from "./schema";
-import { ok } from "assert";
-import { logger } from "@sentry/utils";
+// import { ok } from "assert";
+// import { logger } from "@sentry/utils";
 
 const router = new Router();
 
@@ -1041,6 +1043,44 @@ router.post(
 );
 
 router.post(
+  "documents.update_permission",
+  auth(),
+  validate(T.DocumentsAddUser),
+  async (ctx: APIContext) => {
+    const { auth } = ctx.state;
+    const actor = auth.user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, userId, documentId, permission } = ctx.request.body;
+
+    const CheckRemoveUser = await DocumentUser.findOne({
+      where: {
+        userid: userId,
+        documentid: documentId,
+      },
+    });
+    if (permission) {
+      assertDocumentPermission(permission);
+    }
+    if (!CheckRemoveUser) {
+      throw InvalidRequestError("UserId not exsist in documentUser");
+    } else if (CheckRemoveUser.permission !== permission) {
+      CheckRemoveUser.permission = permission;
+      await CheckRemoveUser.save();
+    } else {
+      throw InvalidRequestError(
+        "Type of perrmission must be read or read_write"
+      );
+    }
+    ctx.body = {
+      data: {
+        actor: actor.id,
+        users: userId,
+        permisson: permission,
+      },
+    };
+  }
+);
+router.post(
   "documents.archive",
   auth(),
   validate(T.DocumentsArchiveSchema),
@@ -1069,6 +1109,71 @@ router.post(
     ctx.body = {
       data: await presentDocument(document),
       policies: presentPolicies(user, [document]),
+    };
+  }
+);
+
+router.post(
+  "documents.delete",
+  auth(),
+  validate(T.DocumentsDeleteSchema),
+  async (ctx: APIContext<T.DocumentsDeleteReq>) => {
+    const { id, permanent } = ctx.input.body;
+    const { user } = ctx.state.auth;
+
+    if (permanent) {
+      const document = await Document.findByPk(id, {
+        userId: user.id,
+        paranoid: false,
+      });
+      authorize(user, "permanentDelete", document);
+
+      await Document.update(
+        {
+          parentDocumentId: null,
+        },
+        {
+          where: {
+            parentDocumentId: document.id,
+          },
+          paranoid: false,
+        }
+      );
+      await documentPermanentDeleter([document]);
+      await Event.create({
+        name: "documents.permanent_delete",
+        documentId: document.id,
+        collectionId: document.collectionId,
+        teamId: document.teamId,
+        actorId: user.id,
+        data: {
+          title: document.title,
+        },
+        ip: ctx.request.ip,
+      });
+    } else {
+      const document = await Document.findByPk(id, {
+        userId: user.id,
+      });
+
+      authorize(user, "delete", document);
+
+      await document.delete(user.id);
+      await Event.create({
+        name: "documents.delete",
+        documentId: document.id,
+        collectionId: document.collectionId,
+        teamId: document.teamId,
+        actorId: user.id,
+        data: {
+          title: document.title,
+        },
+        ip: ctx.request.ip,
+      });
+    }
+
+    ctx.body = {
+      success: true,
     };
   }
 );

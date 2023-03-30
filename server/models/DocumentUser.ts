@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Column,
   ForeignKey,
@@ -49,7 +50,6 @@ class DocumentUser extends BaseModel {
 
   @Column(DataType.UUID)
   userid: string;
-
 }
 
 export default DocumentUser;
