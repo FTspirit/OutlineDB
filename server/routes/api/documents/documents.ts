@@ -53,6 +53,7 @@ import env from "../../../env";
 import pagination from "../middlewares/pagination";
 import * as T from "./schema";
 import { ok } from "assert";
+import { logger } from "@sentry/utils";
 
 const router = new Router();
 
@@ -966,39 +967,40 @@ router.post(
     const actor = auth.user;
     const { id, userId, documentId, permission } = ctx.request.body;
 
-    // S1: Check ACTOR === createdById ?'
-    const documentInstance = await Document.findOne({
-      where: {
-        userId: actor.id,
-      },
-    });
-    if (documentInstance?.createdById) {
+    // S1: Check ACTOR === createdById ?
+    if (actor.id === userId) {
       throw InvalidRequestError("You cant add yourself");
     }
-    if (!documentInstance?.collectionId) {
-      throw InvalidRequestError("Document not exist in Collection");
-    }
-    // S2: Check documentId exist in Document ?
-    const collectionInstance = await Document.findOne({
+    const documentInstance = await Document.findOne({
       where: {
         id: documentId,
       },
     });
-    if (!collectionInstance) {
-      throw InvalidRequestError("DocumentId not exist in Document");
+    if (!documentInstance?.collectionId) {
+      throw InvalidRequestError("Document not exist in Collection");
     }
 
-    // S3: Check user exist in User ?
-    const CheckUserIDinUser = await User.findOne({
-      where: {
-        userid: userId,
-      },
-    });
-    if (CheckUserIDinUser) {
-      throw InvalidRequestError("UserId not exist in User");
-    }
+    // S2: Check documentId exist in Document ?
+    // const checkDoc = await Document.findOne({
+    //   where: {
+    //     id: documentId,
+    //   },
+    // });
+    // if (!checkDoc) {
+    //   throw InvalidRequestError("DocumentId not exist in Document");
+    // }
 
-    // S4: Check user exist in CollectionUser ?
+    // // S3: Check user exist in User ?
+    // const CheckUserIDinUser = await User.findOne({
+    //   where: {
+    //     userid: userId,
+    //   },
+    // });
+    // if (CheckUserIDinUser) {
+    //   throw InvalidRequestError("UserId not exist in User");
+    // }
+
+    // // S4: Check user exist in CollectionUser ?
     const CheckUserIDinColUser = await CollectionUser.findOne({
       where: {
         userId: userId,
@@ -1006,7 +1008,7 @@ router.post(
       },
     });
     if (!CheckUserIDinColUser) {
-      throw InvalidRequestError("UserId not in CollectionUser");
+      throw InvalidRequestError("User not in CollectionUser");
     }
 
     // S5: Check user exist in DocumentUser ?
@@ -1016,11 +1018,11 @@ router.post(
         documentid: documentId,
       },
     });
-    if (!CheckUserIDinDocUser) {
-      throw InvalidRequestError("UserId not in DocumentUser");
+    if (CheckUserIDinDocUser) {
+      throw InvalidRequestError("UserId exsist in documentUser");
     }
 
-    if (!CheckUserIDinUser && !CheckUserIDinColUser && !CheckUserIDinDocUser) {
+    if (!CheckUserIDinDocUser) {
       const membership = await DocumentUser.create({
         id: id,
         userid: userId,
