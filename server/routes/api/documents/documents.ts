@@ -982,6 +982,17 @@ router.post(
       throw InvalidRequestError("Document not exist in Collection");
     }
 
+    // S5: Check actor permission read_write in collections
+    const checkActor = await CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
+    }
+
     // S2: Check GroupId in Collection_group
     const GroupInstance = await CollectionGroup.findOne({
       where: {
@@ -1039,6 +1050,17 @@ router.post(
       },
     });
 
+    // S5: Check actor permission read_write in collections
+    const checkActor = await CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
+    }
+
     if (permission) {
       assertDocumentPermission(permission);
     }
@@ -1086,6 +1108,18 @@ router.post(
         documentid: documentId,
       },
     });
+
+    // S5: Check actor permission read_write in collections
+    const checkActor = await CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
+    }
+
     const CountUser = await DocumentGroup.count({
       where: {
         groupid: groupId,
@@ -1126,6 +1160,17 @@ router.post(
     // S1: Check ACTOR === createdById ?
     if (actor.id === userId) {
       throw InvalidRequestError("You cant add yourself");
+    }
+
+    // S5: Check actor permission read_write in collections
+    const checkActor = await CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
     }
 
     // S4: Get CollectionID in Document database
@@ -1189,6 +1234,17 @@ router.post(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, userId, documentId, permission } = ctx.request.body;
 
+    // S5: Check actor permission read_write in collections
+    const checkActor = await CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
+    }
+
     const CheckRemoveUser = await DocumentUser.findOne({
       where: {
         userid: userId,
@@ -1218,9 +1274,7 @@ router.post(
     }
     ctx.body = {
       data: {
-        actor: actor.id,
-        users: userId,
-        permisson: permission,
+        success: true,
       },
     };
   }
@@ -1233,7 +1287,7 @@ router.post(
   async (ctx: APIContext) => {
     const { auth } = ctx.state;
     const actor = auth.user;
-    const { id, userId, documentId, permission } = ctx.request.body;
+    const { userId, documentId } = ctx.request.body;
 
     // S1: Check user exist in DocumentUser ?
     const CheckUserExist = await DocumentUser.findOne({
@@ -1242,6 +1296,18 @@ router.post(
         documentid: documentId,
       },
     });
+
+    // S5: Check actor permission read_write in collections
+    const checkActor = await CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
+    }
+
     const CountUser = await DocumentUser.count({
       where: {
         userid: userId,
@@ -1261,8 +1327,7 @@ router.post(
 
     ctx.body = {
       data: {
-        CountUser: CountUser,
-        success: "ok",
+        success: true,
       },
     };
   }
