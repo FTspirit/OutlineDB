@@ -994,13 +994,13 @@ router.post(
     }
 
     // S3: Check GroupId exist in DocumentGroup ?
-    const CheckUserIDinDocUser = await DocumentGroup.findOne({
+    const CheckGroupIdinDocGroup = await DocumentGroup.findOne({
       where: {
         groupid: groupId,
         documentid: documentId,
       },
     });
-    if (CheckUserIDinDocUser) {
+    if (CheckGroupIdinDocGroup) {
       throw InvalidRequestError("Group exist in Document_Group");
     } else {
       const groupMembership = DocumentGroup.create({
@@ -1016,6 +1016,55 @@ router.post(
         actor: actor.id,
         permisson: permission,
         groupid: groupId,
+      },
+    };
+  }
+);
+
+router.post(
+  "documents.group_update_permission",
+  auth(),
+  validate(T.DocumentsAddGroup),
+  async (ctx: APIContext) => {
+    const { auth } = ctx.state;
+    const actor = auth.user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, groupId, documentId, permission } = ctx.request.body;
+
+    // S3: Check GroupId exist in DocumentGroup ?
+    const CheckGroupIdinDocGroup = await DocumentGroup.findOne({
+      where: {
+        groupid: groupId,
+        documentid: documentId,
+      },
+    });
+
+    if (permission) {
+      assertDocumentPermission(permission);
+    }
+    if (!CheckGroupIdinDocGroup) {
+      throw InvalidRequestError("UserId not exsist in documentUser");
+    } else if (CheckGroupIdinDocGroup.permission !== permission) {
+      // CheckGroupIdinDocGroup.permission = permission;
+      await DocumentGroup.update(
+        { permission: permission },
+        {
+          where: {
+            groupid: groupId,
+            documentid: documentId,
+          },
+        }
+      );
+    } else {
+      throw InvalidRequestError(
+        "Type of perrmission must be read or read_write"
+      );
+    }
+    ctx.body = {
+      data: {
+        actor: actor.id,
+        group: groupId,
+        permisson: permission,
       },
     };
   }
@@ -1108,8 +1157,16 @@ router.post(
     if (!CheckRemoveUser) {
       throw InvalidRequestError("UserId not exsist in documentUser");
     } else if (CheckRemoveUser.permission !== permission) {
-      CheckRemoveUser.permission = permission;
-      await CheckRemoveUser.save();
+      // CheckRemoveUser.permission = permission;
+      await DocumentUser.update(
+        { permission: permission },
+        {
+          where: {
+            userid: userId,
+            documentid: documentId,
+          },
+        }
+      );
     } else {
       throw InvalidRequestError(
         "Type of perrmission must be read or read_write"
