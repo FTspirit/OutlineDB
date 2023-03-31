@@ -1071,6 +1071,50 @@ router.post(
 );
 
 router.post(
+  "documents.remove_group",
+  auth(),
+  validate(T.DocumentsAddGroup),
+  async (ctx: APIContext) => {
+    const { auth } = ctx.state;
+    const actor = auth.user;
+    const { id, groupId, documentId, permission } = ctx.request.body;
+
+    // S1: Check user exist in DocumentUser ?
+    const CheckGroupExist = await DocumentGroup.findOne({
+      where: {
+        groupid: groupId,
+        documentid: documentId,
+      },
+    });
+    const CountUser = await DocumentGroup.count({
+      where: {
+        groupid: groupId,
+        documentid: documentId,
+      },
+    });
+    if (!CheckGroupExist) {
+      throw InvalidRequestError(
+        "Group and document not exsist in documentGroup"
+      );
+    } else {
+      DocumentGroup.destroy({
+        where: {
+          groupid: groupId,
+          documentid: documentId,
+        },
+      });
+    }
+
+    ctx.body = {
+      data: {
+        CountUser: CountUser,
+        success: "ok",
+      },
+    };
+  }
+);
+
+router.post(
   "documents.add_user",
   auth(),
   validate(T.DocumentsAddUser),
