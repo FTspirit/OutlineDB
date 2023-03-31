@@ -16,6 +16,8 @@ export { default as Document } from "./Document";
 
 export { default as DocumentUser } from "./DocumentUser";
 
+export { default as DocumentGroup } from "./DocumentGroup";
+
 export { default as Event } from "./Event";
 
 export { default as FileOperation } from "./FileOperation";

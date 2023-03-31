@@ -231,6 +231,18 @@ export const DocumentsAddUser = BaseSchema.extend({
     id: z.string().uuid().optional(),
     userId: z.string().uuid(),
     permission: z.string(),
+    documentId: z.string(),
+    // startDateQuery: z.string(),
+    // endDateQuery: z.string(),
+  }),
+});
+
+export const DocumentsAddGroup = BaseSchema.extend({
+  body: BaseIdSchema.extend({
+    id: z.string().uuid().optional(),
+    groupId: z.string().uuid(),
+    permission: z.string(),
+    documentId: z.string(),
     // startDateQuery: z.string(),
     // endDateQuery: z.string(),
   }),

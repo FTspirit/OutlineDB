@@ -37,6 +37,9 @@ import {
   View,
   DocumentUser,
   CollectionUser,
+  DocumentGroup,
+  Group,
+  CollectionGroup,
 } from "@server/models";
 import DocumentHelper from "@server/models/helpers/DocumentHelper";
 import SearchHelper from "@server/models/helpers/SearchHelper";
@@ -961,6 +964,64 @@ router.post(
 );
 
 router.post(
+  "documents.add_group",
+  auth(),
+  validate(T.DocumentsAddGroup),
+  async (ctx: APIContext) => {
+    const { auth } = ctx.state;
+    const actor = auth.user;
+    const { id, groupId, documentId, permission } = ctx.request.body;
+
+    // S1: Get CollectionID in Document database
+    const documentInstance = await Document.findOne({
+      where: {
+        id: documentId,
+      },
+    });
+    if (!documentInstance?.collectionId) {
+      throw InvalidRequestError("Document not exist in Collection");
+    }
+
+    // S2: Check GroupId in Collection_group
+    const GroupInstance = await CollectionGroup.findOne({
+      where: {
+        groupId: groupId,
+        collectionId: documentInstance?.collectionId,
+      },
+    });
+    if (!GroupInstance) {
+      throw InvalidRequestError("Group not exist in Collection_Group");
+    }
+
+    // S3: Check GroupId exist in DocumentGroup ?
+    const CheckUserIDinDocUser = await DocumentGroup.findOne({
+      where: {
+        groupid: groupId,
+        documentid: documentId,
+      },
+    });
+    if (CheckUserIDinDocUser) {
+      throw InvalidRequestError("Group exist in Document_Group");
+    } else {
+      const groupMembership = DocumentGroup.create({
+        id: id,
+        groupid: groupId,
+        documentid: documentId,
+        permission: permission,
+      });
+    }
+
+    ctx.body = {
+      data: {
+        actor: actor.id,
+        permisson: permission,
+        groupid: groupId,
+      },
+    };
+  }
+);
+
+router.post(
   "documents.add_user",
   auth(),
   validate(T.DocumentsAddUser),
@@ -973,6 +1034,8 @@ router.post(
     if (actor.id === userId) {
       throw InvalidRequestError("You cant add yourself");
     }
+
+    // S4: Get CollectionID in Document database
     const documentInstance = await Document.findOne({
       where: {
         id: documentId,
@@ -982,27 +1045,7 @@ router.post(
       throw InvalidRequestError("Document not exist in Collection");
     }
 
-    // S2: Check documentId exist in Document ?
-    // const checkDoc = await Document.findOne({
-    //   where: {
-    //     id: documentId,
-    //   },
-    // });
-    // if (!checkDoc) {
-    //   throw InvalidRequestError("DocumentId not exist in Document");
-    // }
-
-    // // S3: Check user exist in User ?
-    // const CheckUserIDinUser = await User.findOne({
-    //   where: {
-    //     userid: userId,
-    //   },
-    // });
-    // if (CheckUserIDinUser) {
-    //   throw InvalidRequestError("UserId not exist in User");
-    // }
-
-    // // S4: Check user exist in CollectionUser ?
+    // S2: Check user exist in CollectionUser ?
     const CheckUserIDinColUser = await CollectionUser.findOne({
       where: {
         userId: userId,
@@ -1013,7 +1056,7 @@ router.post(
       throw InvalidRequestError("User not in CollectionUser");
     }
 
-    // S5: Check user exist in DocumentUser ?
+    // S3: Check user exist in DocumentUser ?
     const CheckUserIDinDocUser = await DocumentUser.findOne({
       where: {
         userid: userId,
@@ -1032,6 +1075,7 @@ router.post(
         permission: permission,
       });
     }
+
     ctx.body = {
       data: {
         actor: actor.id,
@@ -1080,6 +1124,49 @@ router.post(
     };
   }
 );
+
+router.post(
+  "documents.remove_user",
+  auth(),
+  validate(T.DocumentsAddUser),
+  async (ctx: APIContext) => {
+    const { auth } = ctx.state;
+    const actor = auth.user;
+    const { id, userId, documentId, permission } = ctx.request.body;
+
+    // S1: Check user exist in DocumentUser ?
+    const CheckUserExist = await DocumentUser.findOne({
+      where: {
+        userid: userId,
+        documentid: documentId,
+      },
+    });
+    const CountUser = await DocumentUser.count({
+      where: {
+        userid: userId,
+        documentid: documentId,
+      },
+    });
+    if (!CheckUserExist) {
+      throw InvalidRequestError("user and document not exsist in documentUser");
+    } else {
+      DocumentUser.destroy({
+        where: {
+          userid: userId,
+          documentid: documentId,
+        },
+      });
+    }
+
+    ctx.body = {
+      data: {
+        CountUser: CountUser,
+        success: "ok",
+      },
+    };
+  }
+);
+
 router.post(
   "documents.archive",
   auth(),
