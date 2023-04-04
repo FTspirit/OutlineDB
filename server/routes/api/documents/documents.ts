@@ -1333,6 +1333,34 @@ router.post(
   }
 );
 
+router.post("documents.user", auth(), async (ctx: APIContext) => {
+  const { auth } = ctx.state;
+  const actor = auth.user;
+  const { userId, documentId } = ctx.request.body;
+
+  // S1: Check actor permission read_write in collections
+  const checkActor = await CollectionUser.findOne({
+    where: {
+      userId: actor.id,
+      permission: "read_write",
+    },
+  });
+  if (!checkActor) {
+    throw InvalidRequestError("Actor permission denied");
+  }
+
+  // S2: Return data from DocumentUser
+  const userDocument = await DocumentUser.findAll();
+  if (!userDocument) {
+    throw InvalidRequestError("Database is empty!");
+  }
+  ctx.body = {
+    data: {
+      success: userDocument,
+    },
+  };
+});
+
 router.post(
   "documents.archive",
   auth(),

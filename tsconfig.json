@@ -21,6 +21,7 @@
     "strictNullChecks": true,
     "noEmit": true,
     "suppressImplicitAnyIndexErrors": true,
+    "ignoreDeprecations": "5.0",
     "target": "es2020",
     "paths": {
       "prosemirror-markdown": ["./node_modules/@types/prosemirror-markdown"],
