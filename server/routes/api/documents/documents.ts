@@ -57,6 +57,7 @@ import { assertPresent, assertDocumentPermission } from "@server/validation";
 import env from "../../../env";
 import pagination from "../middlewares/pagination";
 import * as T from "./schema";
+import { UserValidation } from "@shared/validations";
 // import { ok } from "assert";
 // import { logger } from "@sentry/utils";
 
@@ -1224,6 +1225,163 @@ router.post(
   }
 );
 
+router.post("documents.add_userV2", auth(), async (ctx: APIContext) => {
+  const { auth } = ctx.state;
+  const actor = auth.user;
+  const { userData } = ctx.request.body;
+
+  if (userData.length === 0) {
+    throw InvalidRequestError("userData is not a array");
+  }
+  if (!userData) {
+    throw InvalidRequestError("userData is empty");
+  }
+  console.log(userData.length);
+  console.log([...userData]);
+  const membership = await DocumentUser.bulkCreate([...userData]);
+  // console.log(userData);
+
+  //  for(let i = 0, i < userData.length; i++){
+  //   const membership = await DocumentUser.create({
+  //     id: id,
+  //     userid: userId,
+  //     documentid: documentId,
+  //     permission: permission,
+  //   });
+  //  }
+  // S1: Check actor permission read_write in collections
+  // const checkActor = heeeeki CollectionUser.findOne({
+  //   where: {
+  //     userId: actor.id,
+  //     permission: "read_write",
+  //   },
+  // });
+  // if (!checkActor) {
+  //   throw InvalidRequestError("Actor permission denied");
+  // }
+
+  // function newValidateUserData() {
+  //   return userData.map(
+  //     async (data: {
+  //       userId: string;
+  //       documentId: string;
+  //       permission: string;
+  //     }) => {
+  //       console.log(data);
+  //       // S1: Check ACTOR === createdById ?
+  //       if (actor.id === data.userId) {
+  //         throw InvalidRequestError("You cant add yourself");
+  //       }
+
+  // S2: Get CollectionID in Document database
+  // const documentInstance = await Document.findOne({
+  //   where: {
+  //     id: data.documentId,
+  //   },
+  // });
+  // if (!documentInstance?.collectionId) {
+  //   throw InvalidRequestError("Document not exist in Collection");
+  // }
+
+  // // S3: Check user exist in CollectionUser ?
+  // const CheckUserIDinColUser = await CollectionUser.findOne({
+  //   where: {
+  //     userId: data.userId,
+  //     collectionId: documentInstance?.collectionId,
+  //   },
+  // });
+  // if (!CheckUserIDinColUser) {
+  //   throw InvalidRequestError("User not in CollectionUser");
+  // }
+
+  // // S4: Check user exist in DocumentUser ?
+  // const CheckUserIDinDocUser = await DocumentUser.findOne({
+  //   where: {
+  //     userid: data.userId,
+  //     documentid: data.documentId,
+  //   },
+  // });
+  // if (CheckUserIDinDocUser) {
+  //   throw InvalidRequestError("UserId exsist in documentUser");
+  // }
+  //     }
+  //   );
+  // }
+  // console.log(newValidateUserData);
+  // async function addArraytoDB(arrayData: any) {
+  //   try {
+  //     const result = await DocumentUser.bulkCreate({
+  //       userid: arrayData.userId,
+  //     });
+  //   } catch (error) {
+  //     console.log(error);
+  //   }
+  // }
+  // addArraytoDB(userData);
+  // // S1: Check ACTOR === createdById ?
+  // if (actor.id === userId) {
+  //   throw InvalidRequestError("You cant add yourself");
+  // }
+
+  // // S5: Check actor permission read_write in collections
+  // const checkActor = await CollectionUser.findOne({
+  //   where: {
+  //     userId: actor.id,
+  //     permission: "read_write",
+  //   },
+  // });
+  // if (!checkActor) {
+  //   throw InvalidRequestError("Actor permission denied");
+  // }
+
+  // // S4: Get CollectionID in Document database
+  // const documentInstance = await Document.findOne({
+  //   where: {
+  //     id: documentId,
+  //   },
+  // });
+  // if (!documentInstance?.collectionId) {
+  //   throw InvalidRequestError("Document not exist in Collection");
+  // }
+
+  // // S2: Check user exist in CollectionUser ?
+  // const CheckUserIDinColUser = await CollectionUser.findOne({
+  //   where: {
+  //     userId: userId,
+  //     collectionId: documentInstance?.collectionId,
+  //   },
+  // });
+  // if (!CheckUserIDinColUser) {
+  //   throw InvalidRequestError("User not in CollectionUser");
+  // }
+
+  // // S3: Check user exist in DocumentUser ?
+  // const CheckUserIDinDocUser = await DocumentUser.findOne({
+  //   where: {
+  //     userid: userId,
+  //     documentid: documentId,
+  //   },
+  // });
+  // if (CheckUserIDinDocUser) {
+  //   throw InvalidRequestError("UserId exsist in documentUser");
+  // }
+
+  // if (!CheckUserIDinDocUser) {
+  //   const membership = await DocumentUser.create({
+  //     id: id,
+  //     userid: userId,
+  //     documentid: documentId,
+  //     permission: permission,
+  //   });
+  // }
+
+  ctx.body = {
+    data: {
+      metadata: userData,
+    },
+  };
+});
+
 router.post(
   "documents.update_permission",
   auth(),
@@ -1336,7 +1494,6 @@ router.post(
 router.post("documents.user", auth(), async (ctx: APIContext) => {
   const { auth } = ctx.state;
   const actor = auth.user;
-  const { userId, documentId } = ctx.request.body;
 
   // S1: Check actor permission read_write in collections
   const checkActor = await CollectionUser.findOne({
@@ -1357,6 +1514,33 @@ router.post("documents.user", auth(), async (ctx: APIContext) => {
   ctx.body = {
     data: {
       success: userDocument,
+    },
+  };
+});
+
+router.post("documents.group", auth(), async (ctx: APIContext) => {
+  const { auth } = ctx.state;
+  const actor = auth.user;
+
+  // S1: Check actor permission read_write in collections
+  const checkActor = await CollectionUser.findOne({
+    where: {
+      userId: actor.id,
+      permission: "read_write",
+    },
+  });
+  if (!checkActor) {
+    throw InvalidRequestError("Actor permission denied");
+  }
+
+  // S2: Return data from DocumentUser
+  const groupDocument = await DocumentGroup.findAll();
+  if (!groupDocument) {
+    throw InvalidRequestError("Database is empty!");
+  }
+  ctx.body = {
+    data: {
+      success: groupDocument,
     },
   };
 });
