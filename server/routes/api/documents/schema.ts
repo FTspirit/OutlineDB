@@ -229,9 +229,9 @@ export const DocumentsMoveSchema = BaseSchema.extend({
 export const DocumentsAddUser = BaseSchema.extend({
   body: BaseIdSchema.extend({
     id: z.string().uuid().optional(),
-    userId: z.string().uuid(),
+    userId: z.string().uuid().optional(),
     permission: z.string().optional(),
-    documentId: z.string(),
+    documentId: z.string().optional(),
     // startDateQuery: z.string(),
     // endDateQuery: z.string(),
   }),

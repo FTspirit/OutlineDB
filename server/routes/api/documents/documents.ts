@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable object-shorthand */
 import fs from "fs-extra";
@@ -57,7 +58,7 @@ import { assertPresent, assertDocumentPermission } from "@server/validation";
 import env from "../../../env";
 import pagination from "../middlewares/pagination";
 import * as T from "./schema";
-import { UserValidation } from "@shared/validations";
+// import { UserValidation } from "@shared/validations";
 // import { ok } from "assert";
 // import { logger } from "@sentry/utils";
 
@@ -81,6 +82,124 @@ router.post(
 
     // always filter by the current team
     const { user } = ctx.state.auth;
+    let where: WhereOptions<Document> = {
+      teamId: user.teamId,
+      archivedAt: {
+        [Op.is]: null,
+      },
+    };
+
+    if (template) {
+      where = { ...where, template: true };
+    }
+
+    // if a specific user is passed then add to filters. If the user doesn't
+    // exist in the team then nothing will be returned, so no need to check auth
+    if (createdById) {
+      where = { ...where, createdById };
+    }
+
+    let documentIds: string[] = [];
+
+    // if a specific collection is passed then we need to check auth to view it
+    if (collectionId) {
+      where = { ...where, collectionId };
+      const collection = await Collection.scope({
+        method: ["withMembership", user.id],
+      }).findByPk(collectionId);
+      authorize(user, "read", collection);
+
+      // index sort is special because it uses the order of the documents in the
+      // collection.documentStructure rather than a database column
+      if (sort === "index") {
+        documentIds = (collection?.documentStructure || [])
+          .map((node) => node.id)
+          .slice(ctx.state.pagination.offset, ctx.state.pagination.limit);
+        where = { ...where, id: documentIds };
+      } // otherwise, filter by all collections the user has access to
+    } else {
+      const collectionIds = await user.collectionIds();
+      where = { ...where, collectionId: collectionIds };
+    }
+
+    if (parentDocumentId) {
+      where = { ...where, parentDocumentId };
+    }
+
+    // Explicitly passing 'null' as the parentDocumentId allows listing documents
+    // that have no parent document (aka they are at the root of the collection)
+    if (parentDocumentId === null) {
+      where = {
+        ...where,
+        parentDocumentId: {
+          [Op.is]: null,
+        },
+      };
+    }
+
+    if (backlinkDocumentId) {
+      const backlinks = await Backlink.findAll({
+        attributes: ["reverseDocumentId"],
+        where: {
+          documentId: backlinkDocumentId,
+        },
+      });
+      where = {
+        ...where,
+        id: backlinks.map((backlink) => backlink.reverseDocumentId),
+      };
+    }
+
+    if (sort === "index") {
+      sort = "updatedAt";
+    }
+
+    const documents = await Document.defaultScopeWithUser(user.id).findAll({
+      where,
+      order: [[sort, direction]],
+      offset: ctx.state.pagination.offset,
+      limit: ctx.state.pagination.limit,
+    });
+
+    // index sort is special because it uses the order of the documents in the
+    // collection.documentStructure rather than a database column
+    if (documentIds.length) {
+      documents.sort(
+        (a, b) => documentIds.indexOf(a.id) - documentIds.indexOf(b.id)
+      );
+    }
+
+    const data = await Promise.all(
+      documents.map((document) => presentDocument(document))
+    );
+    const policies = presentPolicies(user, documents);
+    ctx.body = {
+      pagination: ctx.state.pagination,
+      data,
+      policies,
+    };
+  }
+);
+
+router.post(
+  "documents.listV2",
+  auth(),
+  pagination(),
+  validate(T.DocumentsListSchema),
+  async (ctx: APIContext<T.DocumentsListReq>) => {
+    let { sort } = ctx.input.body;
+    const {
+      direction,
+      template,
+      collectionId,
+      backlinkDocumentId,
+      parentDocumentId,
+      userId: createdById,
+    } = ctx.input.body;
+
+    // always filter by the current team
+    const { user } = ctx.state.auth;
+
     let where: WhereOptions<Document> = {
       teamId: user.teamId,
       archivedAt: {
@@ -1225,162 +1344,81 @@ router.post(
   }
 );
 
-router.post("documents.add_userV2", auth(), async (ctx: APIContext) => {
-  const { auth } = ctx.state;
-  const actor = auth.user;
-  const { userData } = ctx.request.body;
+router.post(
+  "documents.add_userV2",
+  auth(),
+  validate(T.DocumentsAddUser),
+  async (ctx: APIContext) => {
+    const { auth } = ctx.state;
+    const actor = auth.user;
+    const { userData } = ctx.request.body;
 
-  if (userData.length === 0) {
-    throw InvalidRequestError("userData is not a array");
+    if (userData.length === 0) {
+      throw InvalidRequestError("userData is not a array");
+    }
+    if (!userData) {
+      throw InvalidRequestError("userData is empty");
+      1;
+    }
+
+    // S1: Check actor permission read_write in collections
+    const checkActor = CollectionUser.findOne({
+      where: {
+        userId: actor.id,
+        permission: "read_write",
+      },
+    });
+    if (!checkActor) {
+      throw InvalidRequestError("Actor permission denied");
+    }
+
+    for (let i = 0; i < userData.length; i++) {
+      // S2: Get CollectionID in Document database
+      const documentInstance = await Document.findOne({
+        where: {
+          id: userData[i].documentId,
+        },
+      });
+      if (!documentInstance?.collectionId) {
+        throw InvalidRequestError("Document not exist in Collection");
+      }
+
+      // S3: Check user exist in CollectionUser ?
+      const CheckUserIDinColUser = await CollectionUser.findOne({
+        where: {
+          userId: userData[i].userId,
+          collectionId: documentInstance?.collectionId,
+        },
+      });
+      if (!CheckUserIDinColUser) {
+        throw InvalidRequestError("User not in CollectionUser");
+      }
+
+      // S4: Check user exist in DocumentUser ?
+      const CheckUserIDinDocUser = await DocumentUser.findOne({
+        where: {
+          userid: userData[i].userId,
+          documentid: userData[i].documentId,
+        },
+      });
+      if (CheckUserIDinDocUser) {
+        throw InvalidRequestError("UserId exsist in documentUser");
+      }
+
+      const membership = await DocumentUser.create({
+        id: userData[i].Id,
+        userid: userData[i].userId,
+        documentid: userData[i].documentId,
+      });
+    }
+
+    ctx.body = {
+      data: {
+        metadata: userData,
+      },
+    };
   }
-  if (!userData) {
-    throw InvalidRequestError("userData is empty");
-  }
-  console.log(userData.length);
-  console.log([...userData]);
-  const membership = await DocumentUser.bulkCreate([...userData]);
-  // console.log(userData);
-
-  //  for(let i = 0, i < userData.length; i++){
-  //   const membership = await DocumentUser.create({
-  //     id: id,
-  //     userid: userId,
-  //     documentid: documentId,
-  //     permission: permission,
-  //   });
-  //  }
-  // S1: Check actor permission read_write in collections
-  // const checkActor = heeeeki CollectionUser.findOne({
-  //   where: {
-  //     userId: actor.id,
-  //     permission: "read_write",
-  //   },
-  // });
-  // if (!checkActor) {
-  //   throw InvalidRequestError("Actor permission denied");
-  // }
-
-  // function newValidateUserData() {
-  //   return userData.map(
-  //     async (data: {
-  //       userId: string;
-  //       documentId: string;
-  //       permission: string;
-  //     }) => {
-  //       console.log(data);
-  //       // S1: Check ACTOR === createdById ?
-  //       if (actor.id === data.userId) {
-  //         throw InvalidRequestError("You cant add yourself");
-  //       }
-
-  // S2: Get CollectionID in Document database
-  // const documentInstance = await Document.findOne({
-  //   where: {
-  //     id: data.documentId,
-  //   },
-  // });
-  // if (!documentInstance?.collectionId) {
-  //   throw InvalidRequestError("Document not exist in Collection");
-  // }
-
-  // // S3: Check user exist in CollectionUser ?
-  // const CheckUserIDinColUser = await CollectionUser.findOne({
-  //   where: {
-  //     userId: data.userId,
-  //     collectionId: documentInstance?.collectionId,
-  //   },
-  // });
-  // if (!CheckUserIDinColUser) {
-  //   throw InvalidRequestError("User not in CollectionUser");
-  // }
-
-  // // S4: Check user exist in DocumentUser ?
-  // const CheckUserIDinDocUser = await DocumentUser.findOne({
-  //   where: {
-  //     userid: data.userId,
-  //     documentid: data.documentId,
-  //   },
-  // });
-  // if (CheckUserIDinDocUser) {
-  //   throw InvalidRequestError("UserId exsist in documentUser");
-  // }
-  //     }
-  //   );
-  // }
-  // console.log(newValidateUserData);
-  // async function addArraytoDB(arrayData: any) {
-  //   try {
-  //     const result = await DocumentUser.bulkCreate({
-  //       userid: arrayData.userId,
-  //     });
-  //   } catch (error) {
-  //     console.log(error);
-  //   }
-  // }
-  // addArraytoDB(userData);
-  // // S1: Check ACTOR === createdById ?
-  // if (actor.id === userId) {
-  //   throw InvalidRequestError("You cant add yourself");
-  // }
-
-  // // S5: Check actor permission read_write in collections
-  // const checkActor = await CollectionUser.findOne({
-  //   where: {
-  //     userId: actor.id,
-  //     permission: "read_write",
-  //   },
-  // });
-  // if (!checkActor) {
-  //   throw InvalidRequestError("Actor permission denied");
-  // }
-
-  // // S4: Get CollectionID in Document database
-  // const documentInstance = await Document.findOne({
-  //   where: {
-  //     id: documentId,
-  //   },
-  // });
-  // if (!documentInstance?.collectionId) {
-  //   throw InvalidRequestError("Document not exist in Collection");
-  // }
-
-  // // S2: Check user exist in CollectionUser ?
-  // const CheckUserIDinColUser = await CollectionUser.findOne({
-  //   where: {
-  //     userId: userId,
-  //     collectionId: documentInstance?.collectionId,
-  //   },
-  // });
-  // if (!CheckUserIDinColUser) {
-  //   throw InvalidRequestError("User not in CollectionUser");
-  // }
-
-  // // S3: Check user exist in DocumentUser ?
-  // const CheckUserIDinDocUser = await DocumentUser.findOne({
-  //   where: {
-  //     userid: userId,
-  //     documentid: documentId,
-  //   },
-  // });
-  // if (CheckUserIDinDocUser) {
-  //   throw InvalidRequestError("UserId exsist in documentUser");
-  // }
-
-  // if (!CheckUserIDinDocUser) {
-  //   const membership = await DocumentUser.create({
-  //     id: id,
-  //     userid: userId,
-  //     documentid: documentId,
-  //     permission: permission,
-  //   });
-  // }
-
-  ctx.body = {
-    data: {
-      metadata: userData,
-    },
-  };
-});
+);
 
 router.post(
   "documents.update_permission",

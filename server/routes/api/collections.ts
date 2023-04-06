@@ -789,6 +789,52 @@ router.post(
   }
 );
 
+router.post(
+  "collections.listV2",
+  auth(),
+  pagination(),
+  async (ctx: APIContext) => {
+    const { user } = ctx.state.auth;
+    const collectionIds = await user.collectionIds();
+    const documentIds = await user.documentsIds();
+    console.log(documentIds);
+    const where: WhereOptions<Collection> = {
+      teamId: user.teamId,
+      id: collectionIds,
+    };
+    const collections = await Collection.scope({
+      method: ["withMembership", user.id],
+    }).findAll({
+      where,
+      order: [
+        Sequelize.literal('"collection"."index" collate "C"'),
+        ["updatedAt", "DESC"],
+      ],
+      offset: ctx.state.pagination.offset,
+      limit: ctx.state.pagination.limit,
+    });
+
+    console.log(collections);
+
+    const nullIndex = collections.findIndex(
+      (collection) => collection.index === null
+    );
+
+    if (nullIndex !== -1) {
+      const indexedCollections = await collectionIndexing(user.teamId);
+      collections.forEach((collection) => {
+        collection.index = indexedCollections[collection.id];
+      });
+    }
+
+    ctx.body = {
+      pagination: ctx.state.pagination,
+      data: collections.map(presentCollection),
+      policies: presentPolicies(user, collections),
+    };
+  }
+);
+
 router.post("collections.delete", auth(), async (ctx: APIContext) => {
   const { id } = ctx.request.body;
   const { user } = ctx.state.auth;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import crypto from "crypto";
 import { addMinutes, subMinutes } from "date-fns";
 import JWT from "jsonwebtoken";
@@ -26,6 +27,7 @@ import {
 import { languages } from "@shared/i18n";
 import {
   CollectionPermission,
+  DocumentPermission,
   UserPreference,
   UserPreferences,
 } from "@shared/types";
@@ -38,6 +40,7 @@ import ApiKey from "./ApiKey";
 import Attachment from "./Attachment";
 import Collection from "./Collection";
 import CollectionUser from "./CollectionUser";
+import DocumentUser from "./DocumentUser";
 import NotificationSetting from "./NotificationSetting";
 import Star from "./Star";
 import Team from "./Team";
@@ -353,6 +356,22 @@ class User extends ParanoidModel {
           c.collectionGroupMemberships.length > 0
       )
       .map((c) => c.id);
+  };
+
+  documentsIds = async (options = {}) => {
+    const documentStubs = await DocumentUser.findAll({
+      where: {
+        userid: this.id,
+      },
+    });
+
+    return documentStubs
+      .filter(
+        (c) =>
+          c.permission === DocumentPermission.Read ||
+          c.permission === DocumentPermission.ReadWrite
+      )
+      .map((c) => c.userid);
   };
 
   updateActiveAt = async (ctx: Context, force = false) => {
