@@ -1,7 +1,8 @@
 import invariant from "invariant";
 import { TeamPreference } from "@shared/types";
-import { Document, Revision, User, Team } from "@server/models";
+import { Document, Revision, User, Team, DocumentUser } from "@server/models";
 import { allow, _cannot as cannot } from "./cancan";
+import Logger from "../logging/Logger";
 
 allow(User, "createDocument", Team, (user, team) => {
   if (!team || user.isViewer || user.teamId !== team.id) {
@@ -21,6 +22,24 @@ allow(User, "read", Document, (user, document) => {
   }
 
   return user.teamId === document.teamId;
+});
+
+allow(User, "viewDocs", Document, (user, document) => {
+  if (!document) {
+    return false;
+  }
+
+  if (document.collectionId) {
+    return false;
+  }
+
+  if (document.collection && cannot(user, "read", document.collection)) {
+    // existence of collection option is not required here to account for share tokens
+    return false;
+  }
+  console.log(DocumentUser.userid);
+  Logger.info("lifecycle", `Starting service`);
+  return DocumentUser.userid === document.teamId;
 });
 
 allow(User, "download", Document, (user, document) => {

@@ -50,6 +50,7 @@ import ParanoidModel from "./base/ParanoidModel";
 import Fix from "./decorators/Fix";
 import DocumentHelper from "./helpers/DocumentHelper";
 import Length from "./validators/Length";
+import DocumentUser from "./DocumentUser";
 
 const serializer = new MarkdownSerializer();
 
@@ -160,6 +161,24 @@ export const DOCUMENT_VERSION = 2;
           as: "views",
           where: {
             userId,
+          },
+          required: false,
+          separate: true,
+        },
+      ],
+    };
+  },
+  withMembership: (userid: string) => {
+    if (!userid) {
+      return {};
+    }
+    return {
+      include: [
+        {
+          model: DocumentUser,
+          as: "DocumentUsers",
+          where: {
+            userid,
           },
           required: false,
           separate: true,

@@ -199,6 +199,134 @@ router.post(
 
     // always filter by the current team
     const { user } = ctx.state.auth;
+    let where: WhereOptions<Document> = {
+      teamId: user.teamId,
+      archivedAt: {
+        [Op.is]: null,
+      },
+    };
+
+    // Get documentId by the actor Id
+    const getDocumentIds = await DocumentUser.findAll({
+      where: {
+        userid: user.id,
+      },
+    });
+    if (!getDocumentIds) {
+      throw InvalidRequestError("Document not exist documentUser");
+    }
+
+    if (template) {
+      where = { ...where, template: true };
+    }
+
+    // if a specific user is passed then add to filters. If the user doesn't
+    // exist in the team then nothing will be returned, so no need to check auth
+    if (createdById) {
+      where = { ...where, createdById };
+    }
+
+    let documentIds: string[] = [];
+
+    // if a specific collection is passed then we need to check auth to view it
+    if (collectionId) {
+      where = { ...where, collectionId };
+      const collection = await Collection.scope({
+        method: ["withMembership", user.id],
+      }).findByPk(collectionId);
+      authorize(user, "read", collection);
+
+      // index sort is special because it uses the order of the documents in the
+      // collection.documentStructure rather than a database column
+      if (sort === "index") {
+        documentIds = (collection?.documentStructure || [])
+          .map((node) => node.id)
+          .slice(ctx.state.pagination.offset, ctx.state.pagination.limit);
+        where = { ...where, id: documentIds };
+      } // otherwise, filter by all collections the user has access to
+    } else {
+      const collectionIds = await user.collectionIds();
+      where = { ...where, collectionId: collectionIds };
+    }
+
+    if (parentDocumentId) {
+      where = { ...where, parentDocumentId };
+    }
+
+    // Explicitly passing 'null' as the parentDocumentId allows listing documents
+    // that have no parent document (aka they are at the root of the collection)
+    if (parentDocumentId === null) {
+      where = {
+        ...where,
+        parentDocumentId: {
+          [Op.is]: null,
+        },
+      };
+    }
+
+    if (backlinkDocumentId) {
+      const backlinks = await Backlink.findAll({
+        attributes: ["reverseDocumentId"],
+        where: {
+          documentId: backlinkDocumentId,
+        },
+      });
+      where = {
+        ...where,
+        id: backlinks.map((backlink) => backlink.reverseDocumentId),
+      };
+    }
+
+    if (sort === "index") {
+      sort = "updatedAt";
+    }
+
+    const documents = await Document.defaultScopeWithUser(user.id).findAll({
+      where,
+      order: [[sort, direction]],
+      offset: ctx.state.pagination.offset,
+      limit: ctx.state.pagination.limit,
+    });
+
+    // index sort is special because it uses the order of the documents in the
+    // collection.documentStructure rather than a database column
+    if (documentIds.length) {
+      documents.sort(
+        (a, b) => documentIds.indexOf(a.id) - documentIds.indexOf(b.id)
+      );
+    }
+
+    const data = await Promise.all(
+      documents.map((document) => presentDocument(document))
+    );
+
+    const policies = presentPolicies(user, documents);
+    ctx.body = {
+      pagination: ctx.state.pagination,
+      data,
+      policies,
+    };
+  }
+);
+
+router.post(
+  "documents.listV2",
+  auth(),
+  pagination(),
+  validate(T.DocumentsListSchema),
+  async (ctx: APIContext<T.DocumentsListReq>) => {
+    let { sort } = ctx.input.body;
+    const {
+      direction,
+      template,
+      collectionId,
+      backlinkDocumentId,
+      parentDocumentId,
+      userId: createdById,
+    } = ctx.input.body;
+
+    // always filter by the current team
+    const { user } = ctx.state.auth;
 
     let where: WhereOptions<Document> = {
       teamId: user.teamId,
@@ -1352,6 +1480,7 @@ router.post(
     const { auth } = ctx.state;
     const actor = auth.user;
     const { userData } = ctx.request.body;
+    // const { user } = ctx.state.auth;
 
     if (userData.length === 0) {
       throw InvalidRequestError("userData is not a array");
@@ -1381,6 +1510,8 @@ router.post(
       });
       if (!documentInstance?.collectionId) {
         throw InvalidRequestError("Document not exist in Collection");
+      } else {
+        authorize(actor, "viewDocs", documentInstance);
       }
 
       // S3: Check user exist in CollectionUser ?

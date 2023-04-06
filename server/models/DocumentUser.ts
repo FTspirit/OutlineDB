@@ -50,6 +50,10 @@ class DocumentUser extends BaseModel {
 
   @Column(DataType.UUID)
   userid: string;
+
+  @Column(DataType.BOOLEAN)
+  canView: string;
+  static userid: any;
 }
 
 export default DocumentUser;
