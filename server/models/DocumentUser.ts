@@ -11,28 +11,9 @@ import {
   PrimaryKey,
 } from "sequelize-typescript";
 import { DocumentPermission } from "@shared/types";
-import Document from "./Document";
-import User from "./User";
 import BaseModel from "./base/BaseModel";
-import ParanoidModel from "./base/ParanoidModel";
 import Fix from "./decorators/Fix";
 
-@Scopes(() => ({
-  withUser: {
-    include: [
-      {
-        association: "user",
-      },
-    ],
-  },
-  withCollection: {
-    include: [
-      {
-        association: "collection",
-      },
-    ],
-  },
-}))
 @Table({ tableName: "document_user", modelName: "document_user" })
 @Fix
 class DocumentUser extends BaseModel {
@@ -51,9 +32,8 @@ class DocumentUser extends BaseModel {
   @Column(DataType.UUID)
   userid: string;
 
-  @Column(DataType.BOOLEAN)
-  canView: string;
-  static userid: any;
+  @Column(DataType.UUID)
+  collectionid: string;
 }
 
 export default DocumentUser;
