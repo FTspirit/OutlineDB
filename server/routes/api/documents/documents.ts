@@ -1449,72 +1449,70 @@ router.post(
       },
     });
     if (checkInit?.isUpdated) {
-      return;
-    }
-    if (!checkInit?.isUpdated) {
-      // S2: Check userId exist in CollectionUser
-      for (let i = 0; i < userId.length; i++) {
-        const checkUserId = await CollectionUser.findOne({
-          where: {
-            userId: userId[i],
-            collectionId,
-          },
-        });
-        console.log(checkUserId);
-        if (!checkUserId) {
-          throw InvalidRequestError("UserId is not exist in collection User");
-        }
-      }
-
-      // S3: Check documentId exist in Document
-      for (let i = 0; i < documentId.length; i++) {
-        const checkDocumentId = await Document.findOne({
-          where: {
-            collectionId,
-            id: documentId[i],
-          },
-        });
-        if (!checkDocumentId) {
-          throw InvalidRequestError("DocumentId is not exist in Document");
-        }
-      }
-
-      const documentUserInstance = [];
-      for (let i = 0; i < userId.length; i++) {
-        for (let j = 0; j < documentId.length; j++) {
-          const dataUser = {
-            userId: userId[i],
-            documentId: documentId[j],
-          };
-          documentUserInstance.push(dataUser);
-        }
-      }
-
-      for (let i = 0; i < documentUserInstance.length; i++) {
-        const membership = await DocumentUser.create({
-          id: documentUserInstance[i].userId,
-          userid: documentUserInstance[i].userId,
-          documentid: documentUserInstance[i].documentId,
-          collectionid: collectionId,
-          permission: permission,
-        });
-      }
-      const createInit = await DocumentInit.create({
-        collectionId,
-        isUpdated: true,
-      });
-      ctx.body = {
-        data: {
-          message: "oke",
-        },
-      };
-    } else {
-      ctx.body = {
+      return (ctx.body = {
         data: {
           message: "Collection is inited!",
         },
-      };
+      });
     }
+    // S2: Check userId exist in CollectionUser
+    for (let i = 0; i < userId.length; i++) {
+      const checkUserId = await CollectionUser.findOne({
+        where: {
+          userId: userId[i],
+          collectionId: collectionId,
+        },
+      });
+      console.log(checkUserId);
+      if (!checkUserId) {
+        throw InvalidRequestError("UserId is not exist in collection User");
+      }
+    }
+
+    // S3: Check documentId exist in Document
+    for (let i = 0; i < documentId.length; i++) {
+      console.log(documentId[i]);
+      const checkDocumentId = await Document.findOne({
+        where: {
+          collectionId,
+          id: documentId[i],
+        },
+      });
+      console.log(checkDocumentId);
+      if (!checkDocumentId) {
+        throw InvalidRequestError("DocumentId is not exist in Document");
+      }
+    }
+
+    const documentUserInstance = [];
+    for (let i = 0; i < userId.length; i++) {
+      for (let j = 0; j < documentId.length; j++) {
+        const dataUser = {
+          userId: userId[i],
+          documentId: documentId[j],
+        };
+        documentUserInstance.push(dataUser);
+      }
+    }
+
+    for (let i = 0; i < documentUserInstance.length; i++) {
+      const membership = await DocumentUser.create({
+        id: documentUserInstance[i].userId,
+        userid: documentUserInstance[i].userId,
+        documentid: documentUserInstance[i].documentId,
+        collectionid: collectionId,
+        permission: permission,
+      });
+    }
+    const createInit = await DocumentInit.create({
+      collectionId,
+      isUpdated: true,
+    });
+    return (ctx.body = {
+      data: {
+        message: "Collection init success!",
+      },
+    });
   }
 );
 

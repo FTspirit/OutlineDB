@@ -40,6 +40,7 @@ import { DocumentValidation } from "@shared/validations";
 import slugify from "@server/utils/slugify";
 import Backlink from "./Backlink";
 import Collection from "./Collection";
+import DocumentUser from "./DocumentUser";
 import FileOperation from "./FileOperation";
 import Revision from "./Revision";
 import Star from "./Star";
@@ -50,7 +51,6 @@ import ParanoidModel from "./base/ParanoidModel";
 import Fix from "./decorators/Fix";
 import DocumentHelper from "./helpers/DocumentHelper";
 import Length from "./validators/Length";
-import DocumentUser from "./DocumentUser";
 
 const serializer = new MarkdownSerializer();
 
